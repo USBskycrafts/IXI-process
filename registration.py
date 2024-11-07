@@ -5,11 +5,17 @@ import argparse
 def register(input_dir, output_dir, ref_path):
     for root, dirs, files in os.walk(input_dir):
         for file in files:
-            if file.endswith(".nii.gz") or file.endswith(".nii"):
-                out_path = root.replace(input_dir, output_dir)
-                os.makedirs(out_path, exist_ok=True)
+            out_path = root.replace(input_dir, output_dir)
+            if os.path.exists(os.path.join(out_path, file)):
+                continue
+            os.makedirs(out_path, exist_ok=True)
+            if file.endswith(".nii.gz") or file.endswith(".nii") or not 'seg' in file:
                 os.system(
-                    f"""flirt -in {os.path.join(root, file)} -ref {ref_path} -out {os.path.join(out_path, file)} -dof 12 -cost corratio""")
+                    f"flirt -in {os.path.join(root, file)} -ref {ref_path} -out {os.path.join(out_path, file)} -dof 12 -cost corratio -omat /tmp/{os.path.basename(root)}-affine.mat")
+            elif 'seg' in file:
+                os.system(
+                    f"flirt -in {os.path.join(root, file)} -ref {ref_path} -out {os.path.join(out_path, file)} -applyxfm -init /tmp/{os.path.basename(root)}-affine.mat"
+                )
 
 
 if __name__ == '__main__':
