@@ -1,15 +1,31 @@
 import os
 import argparse
+from multiprocessing import Process
+from multiprocessing.pool import ThreadPool
 
 
 def register(input_dir, output_dir, ref_path):
-    for root, dirs, files in os.walk(input_dir):
-        for file in files:
-            if file.endswith(".nii.gz") or file.endswith(".nii"):
+    with ThreadPool(64) as pool:
+        for root, dirs, files in os.walk(input_dir):
+            def task(root, files):
                 out_path = root.replace(input_dir, output_dir)
                 os.makedirs(out_path, exist_ok=True)
-                os.system(
-                    f"""fnirt --in={os.path.join(root, file)} --ref={ref_path} --iout={os.path.join(out_path, file)}""")
+                for file in files:
+                    if os.path.exists(os.path.join(out_path, file)):
+                        continue
+                    if (file.endswith(".nii.gz") or file.endswith(".nii")) and 'seg' not in file:
+                        os.system(
+                            f"fnirt --in={os.path.join(root, file)} --ref={ref_path} --iout={os.path.join(out_path, file)} \
+                                --fout=/tmp/{os.path.basename(root)}-affine.mat")
+                for file in files:
+                    if os.path.exists(os.path.join(out_path, file)):
+                        continue
+                    if 'seg' in file:
+                        os.system(
+                            f"applywarp --in={os.path.join(root, file)} --ref={ref_path} --out={os.path.join(out_path, file)} \
+                                --premat=/tmp/{os.path.basename(root)}-affine.mat"
+                        )
+            pool.apply_async(task, (root, files))
 
 
 if __name__ == '__main__':
